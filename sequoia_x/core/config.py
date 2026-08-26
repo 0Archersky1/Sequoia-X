@@ -2,6 +2,8 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+import os
+
 
 class Settings(BaseSettings):
     db_path: str = "data/sequoia_v2.db"
@@ -15,16 +17,12 @@ class Settings(BaseSettings):
 
     strategy_webhooks: dict[str, str] = {}
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"  # 忽略 .env 中未定义的字段，避免报错
-
+    # ✅ 只保留 model_config，删除 class Config
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore",  # <--- 加上这一行！让 Pydantic 放行未定义的变量
+        extra="ignore",  # 忽略 .env 中未定义的字段，避免报错
     )
 
     @classmethod
