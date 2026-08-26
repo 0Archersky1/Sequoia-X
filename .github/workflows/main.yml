@@ -1,0 +1,43 @@
+name: 每日选股扫描
+
+on:
+  # 定时触发：每个交易日下午 3:30（北京时间）执行
+  schedule:
+    - cron: '30 7 * * 1-5'  # UTC 7:30 = 北京时间 15:30
+  # 手动触发：方便测试
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装 uv（快速包管理器）
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: 安装依赖
+        run: uv sync
+
+      - name: 创建数据目录
+        run: mkdir -p data
+
+      - name: 检查并回填历史数据（首次运行）
+        run: |
+          if [ ! -f "data/sequoia_v2.db" ]; then
+            uv run python main.py --backfill
+          fi
+
+      - name: 运行选股扫描
+        env:
+          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+        run: uv run python main.py
