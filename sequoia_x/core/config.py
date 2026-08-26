@@ -1,13 +1,24 @@
 """配置管理模块：通过 pydantic-settings 从环境变量或 .env 文件加载系统配置。"""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from typing import Optional
 
 class Settings(BaseSettings):
     db_path: str = "data/sequoia_v2.db"
     start_date: str = "2024-01-01"
-    feishu_webhook_url: str  # 必填字段，缺失时抛出 ValidationError
+
+    # 飞书 Webhook 改为可选（留空不推送飞书，兼容旧版）
+    feishu_webhook_url: Optional[str] = None
+
+    # 企业微信 Webhook（必填，用于推送选股结果）
+    wechat_webhook_url: str   # 这里没有默认值，.env 中必须配置
+
     strategy_webhooks: dict[str, str] = {}
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"  # 忽略 .env 中未定义的字段，避免报错
 
     model_config = SettingsConfigDict(
         env_file=".env",
