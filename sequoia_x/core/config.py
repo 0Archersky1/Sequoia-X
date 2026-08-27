@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     feishu_webhook_url: Optional[str] = None
 
     # 企业微信 Webhook（必填，用于推送选股结果）
-    wechat_webhook_url: str   # 这里没有默认值，.env 中必须配置
+    wechat_webhook_url: Optional[str] = None   # 可选，缺失时不影响程序运行
 
     strategy_webhooks: dict[str, str] = {}
 
