@@ -8,7 +8,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40  # 回填需要较长时间
 
     steps:
       - name: 检出代码
@@ -30,16 +30,56 @@ jobs:
       - name: 创建数据目录
         run: mkdir -p data
 
-      # 关键修改：回填步骤也要传递 WECHAT_WEBHOOK_URL
-      - name: 检查并回填历史数据（首次运行）
-        env:
-          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+      - name: 恢复数据库缓存
+        uses: actions/cache@v3
+        with:
+          path: data/sequoia_v2.db
+          key: sequoia-db-v1
+          restore-keys: sequoia-db-
+
+      - name: 回填历史数据（带重试和续传）
         run: |
-          if [ ! -f "data/sequoia_v2.db" ]; then
-            uv run python main.py --backfill
+          # 检查数据库是否已存在且有效
+          if [ -f "data/sequoia_v2.db" ] && [ $(stat -c%s "data/sequoia_v2.db") -gt 1000000 ]; then
+            echo "✅ 数据库已存在且有效，跳过回填"
+            exit 0
           fi
+
+          echo "📦 开始回填历史数据..."
+
+          # 最多重试 5 次，每次失败等待 20 秒
+          for i in {1..5}; do
+            echo ""
+            echo "=========================================="
+            echo "🔄 第 $i 次回填尝试（共5次）"
+            echo "=========================================="
+            
+            # 关键：使用 --workers 2 降低并发，减少网络压力
+            # --backfill 本身支持断点续传，中断后重新运行会跳过已下载的
+            uv run python main.py --backfill --workers 2
+            
+            # 检查是否成功
+            if [ -f "data/sequoia_v2.db" ] && [ $(stat -c%s "data/sequoia_v2.db") -gt 1000000 ]; then
+              echo "✅ 回填成功！数据库大小: $(stat -c%s "data/sequoia_v2.db") 字节"
+              exit 0
+            fi
+            
+            echo "⚠️ 第 $i 次回填失败，等待 20 秒后重试..."
+            sleep 20
+          done
+
+          echo "❌ 回填失败：5 次重试均未成功"
+          exit 1
 
       - name: 运行选股扫描
         env:
           WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
-        run: uv run python main.py
+        run: |
+          # 如果数据库存在就运行扫描
+          if [ -f "data/sequoia_v2.db" ] && [ $(stat -c%s "data/sequoia_v2.db") -gt 1000000 ]; then
+            echo "✅ 数据库有效，开始选股扫描..."
+            uv run python main.py
+          else
+            echo "❌ 数据库不存在或无效，跳过扫描"
+            exit 1
+          fi
