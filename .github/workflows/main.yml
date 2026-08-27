@@ -8,7 +8,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 40  # 回填需要较长时间
+    timeout-minutes: 40
 
     steps:
       - name: 检出代码
@@ -54,9 +54,8 @@ jobs:
             echo "🔄 第 $i 次回填尝试（共5次）"
             echo "=========================================="
             
-            # 关键：使用 --workers 2 降低并发，减少网络压力
-            # --backfill 本身支持断点续传，中断后重新运行会跳过已下载的
-            uv run python main.py --backfill --workers 2
+            # 直接运行回填，不带 --workers 参数（使用默认并发）
+            uv run python main.py --backfill
             
             # 检查是否成功
             if [ -f "data/sequoia_v2.db" ] && [ $(stat -c%s "data/sequoia_v2.db") -gt 1000000 ]; then
@@ -75,7 +74,6 @@ jobs:
         env:
           WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
         run: |
-          # 如果数据库存在就运行扫描
           if [ -f "data/sequoia_v2.db" ] && [ $(stat -c%s "data/sequoia_v2.db") -gt 1000000 ]; then
             echo "✅ 数据库有效，开始选股扫描..."
             uv run python main.py
